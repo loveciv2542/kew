@@ -1,0 +1,134 @@
+#include <DS1307RTC.h>
+#include <TimeLib.h>
+#include <Wire.h>
+#include <SPI.h>
+#include <SD.h>
+
+File myFile;
+const int chipSelect = 10;
+String time ;
+tmElements_t tm;
+//-----------
+#include <nRF24L01.h>
+#include <RF24.h>
+#include "EmonLib.h" 
+#define VOLT_CAL 592
+//#define relayPin 10  //ขาRelay
+
+float t[2],VA,AmpRMS,PF,WATT,Volt,AmpsRMS ;
+float x=((25-t[0])*100)/(Volt*AmpsRMS);
+EnergyMonitor emon1;
+
+RF24 radio(7,8);   //CE,CSN
+const byte address[6]="00001";
+//-------------
+void setup() {
+  Serial.begin(9600);
+  //----------
+  //pinMode(relayPin, OUTPUT);
+  //digitalWrite(relayPin, HIGH);
+  
+  emon1.voltage(A0,VOLT_CAL, 1.7);    //CalibVolt
+  emon1.current(A1,3.5);              //CalibAmp
+  
+  radio.begin();
+  radio.openReadingPipe(0, address);
+  radio.setPALevel(RF24_PA_MIN);
+  radio.startListening();
+  //----------
+  while (!Serial) ; // wait for serial
+  delay(200);
+  Serial.println("DataLogger Shield Test");
+  pinMode(SS,OUTPUT);
+
+  if (!SD.begin(chipSelect)) {
+    Serial.println("SD Card initialization failed!");
+    return;  
+  }
+  Serial.println("SD Card OK.");
+  ReadText();
+}
+
+void loop() {
+  //----------
+  if (radio.available()) {
+    radio.read(&t,sizeof(t));
+  }
+  emon1.calcVI(25,1000);
+  WATT=abs(emon1.realPower); 
+  VA=abs(emon1.apparentPower); 
+  PF=(emon1.powerFactor); 
+  Volt=abs(emon1.Vrms); 
+  AmpsRMS=emon1.Irms;
+  
+  Serial.print("Power : ");Serial.print(Volt*AmpsRMS);Serial.println(" VA");
+  Serial.print("O/I : ");Serial.println(x);
+  //------------
+  time = Now()+" Temp: "+t[0]+"°C Hum: "+t[1]+"% Cur: "+AmpsRMS+" A";
+  Serial.println(time);Serial.println();
+  WriteText(time);
+  delay(3000);
+}
+
+
+void ReadText(){
+  // re-open the file for reading:
+  myFile = SD.open("test.txt");
+  if (myFile) {
+    Serial.println("test.txt:");
+    while (myFile.available()) {
+      Serial.write(myFile.read());
+    }
+    myFile.close();
+  } 
+  else {
+    Serial.println("error open .txt");
+  }
+}
+
+void WriteText(String txt){
+  myFile = SD.open("test.txt", FILE_WRITE);
+  if (myFile) {
+    myFile.println(txt);
+    myFile.close();
+  } 
+  else {
+    Serial.println("error opening test.txt");
+  }
+}
+
+
+String Now(){
+  String time = "";
+  if (RTC.read(tm)) {
+    //    time = String(tm.Hour+":"+tm.Minute+":"+tm.Secnd+" DAY : "+tm.Day+"/"+tm.Month+"/"+tmYearToCalendar(tm.Year));
+    time+=tm.Hour;
+    time+=":";
+
+    time+=tm.Minute;
+    time+=":";
+
+    time+=tm.Second;
+    time+=" DAY : ";
+
+    time+=tm.Day;
+    time+="/";
+
+    time+=tm.Month;
+    time+="/";
+
+    time+=tmYearToCalendar(tm.Year);
+  } 
+  else {
+    time = "NO";
+    if (RTC.chipPresent()) {
+      Serial.println("The DS1307 is stopped.Please run the SetTime");
+      Serial.println();
+    } 
+    else {
+      Serial.println("DS1307 read error! Please check the circuitry.");
+      Serial.println();
+    }
+  }
+  return time;
+}

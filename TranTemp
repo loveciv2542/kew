@@ -1,0 +1,77 @@
+//tran
+#include <SPI.h>
+#include <nRF24L01.h>
+#include <RF24.h>
+#include "DHT.h"
+
+//#include "cactus_io_DHT22.h"
+
+#define DHTPIN 5
+#define DHTTYPE DHT22
+DHT dht(DHTPIN, DHTTYPE);
+
+float t[2];
+
+//DHT22 dht(DHT22_PIN);
+
+RF24 radio(2,4);    // CE, CSN
+const byte address[6]="00001";
+
+void setup()
+{
+  Serial.begin(9600);
+  Serial.println("DHTxx test!");
+
+  //Serial.println("DHT22 Humidity - Temperature Sensor");
+  //Serial.println("RH\tTemp (C)\tTemp (F)\tHeat Index (C)\tHeat Index (F)");
+  
+  radio.begin();
+  radio.openWritingPipe(address);
+  radio.setPALevel(RF24_PA_MIN);
+  radio.stopListening();
+
+  dht.begin();
+}
+
+void loop()
+{
+
+  float h = dht.readHumidity();
+  // Read temperature as Celsius (the default)
+  float temp = dht.readTemperature();
+  // Read temperature as Fahrenheit (isFahrenheit = true)
+  float f = dht.readTemperature(true);
+
+  // Check if any reads failed and exit early (to try again).
+  if (isnan(h) || isnan(temp) || isnan(f)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
+
+  // Compute heat index in Fahrenheit (the default)
+  float hif = dht.computeHeatIndex(f, h);
+  // Compute heat index in Celsius (isFahreheit = false)
+  float hic = dht.computeHeatIndex(temp, h, false);
+  
+
+  Serial.print("Humidity: ");
+  Serial.print(h);
+  Serial.print(" %\t");
+  Serial.print("Temperature: ");
+  Serial.print(temp);
+  Serial.print(" *C ");
+  Serial.print(f);
+  Serial.print(" *F\t");
+  Serial.print("Heat index: ");
+  Serial.print(hic);
+  Serial.print(" *C ");
+  Serial.print(hif);
+  Serial.println(" *F");
+
+  t[1]= h;
+  t[0]= temp;
+  
+  radio.write(&t,sizeof(t));
+  delay(1000);
+  
+}

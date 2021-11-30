@@ -1,0 +1,81 @@
+#include <SPI.h>
+#include <nRF24L01.h>
+#include <RF24.h>
+#include "EmonLib.h"   //ไลบรารี่วัดvolte,current
+
+#define VOLT_CAL 592
+#define relayPin 10    //ขาRelay
+#define ACS_Pin A0     //ขาACS712
+
+float t[2] ;
+float VA ;
+float AmpRMS ;
+float PF ;
+float WATT ;
+float Volt ;
+float AmpsRMS;
+
+EnergyMonitor emon1;
+
+RF24 radio(7, 8);      // CE, CSN
+const byte address[6] = "00001";
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, HIGH);
+
+  emon1.voltage(A0, VOLT_CAL, 1.7);
+  emon1.current(A1,3.5);
+  
+  radio.begin();
+  radio.openReadingPipe(0, address);
+  radio.setPALevel(RF24_PA_MIN);
+}
+
+void loop() {
+  radio.startListening();
+  while (!radio.available());
+  radio.read(&t, sizeof(t));
+
+  if (temp >= 50) {            //เมื่ออุณหภูมิมากกว่า50°C LEDจะสว่าง
+    digitalWrite(LEDPIN,HIGH);
+    Serial.println("Refrigerator : ON");
+    Serial.println(" ");
+  }
+  else{                        //เมื่ออุณหภูมิน้อยกว่า50°C LEDจะดับ
+    digitalWrite(LEDPIN,LOW);
+    Serial.println("Refrigerator : OFF");
+    Serial.println(" ");
+  }
+
+  emon1.calcVI(25,1000);
+  WATT = abs(emon1.realPower); //extract Real Power into variable
+  VA = abs(emon1.apparentPower); //extract Apparent Power into variable
+  PF = (emon1.powerFactor); //extract Power Factor into Variable
+  Volt = abs(emon1.Vrms); //extract Vrms into Variable
+  AmpsRMS = emon1.Irms; //extract Irms into Variable
+
+  float x=((25-t[0])*100)/(Volt*AmpsRMS);
+
+  Serial.print("Temp : ");
+  Serial.print(t[0]);
+  Serial.println(" Degree");
+  Serial.print("Humidity : ");
+  Serial.print(t[1]);
+  Serial.println("%");
+  Serial.print("Voltage : ");  
+  Serial.print(Volt);
+  Serial.println(" Volt rms ");
+  Serial.print("Current : ");
+  Serial.print(AmpsRMS);
+  Serial.println(" Amps RMS");
+  Serial.print("Power : ");
+  Serial.print(Volt*AmpsRMS);
+  Serial.println(" VA ");
+  Serial.print("O/I : ");
+  Serial.println(x);
+  Serial.println();
+  
+  delay(1000);
+}
